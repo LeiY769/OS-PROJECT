@@ -40,6 +40,23 @@ struct	rusage {
 	__kernel_long_t	ru_nivcsw;	/* involuntary " */
 };
 
+#define MAX_SIZE 128
+
+/* Do not modify this structure */
+struct pf_stat {
+  // Number of VMA of a specific process
+  int nb_vma;
+  // Number of CoW page faults of a specific process
+  long cow_page_faults;
+  // Array that contains CoW page faults per VMA
+  long vma_fault[MAX_SIZE];
+  // Array that contains the start address of each VMA
+  unsigned long vma_list_start[MAX_SIZE];
+  // Array that contains the end address of each VMA
+  unsigned long vma_list_end[MAX_SIZE];
+};
+
+
 struct rlimit {
 	__kernel_ulong_t	rlim_cur;
 	__kernel_ulong_t	rlim_max;
