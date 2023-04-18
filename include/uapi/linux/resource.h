@@ -16,6 +16,8 @@
  * Otherwise, each time we add new items, programs which depend on this
  * structure will lose.  This reduces the chances of that happening.
  */
+
+
 #define	RUSAGE_SELF	0
 #define	RUSAGE_CHILDREN	(-1)
 #define RUSAGE_BOTH	(-2)		/* sys_wait4() uses this */
@@ -39,7 +41,12 @@ struct	rusage {
 	__kernel_long_t	ru_nvcsw;	/* voluntary context switches */
 	__kernel_long_t	ru_nivcsw;	/* involuntary " */
 };
-
+struct pf_list{
+	size_t len;
+	char name[17];
+	struct pf_stat *stats;
+	struct list_head list;
+};
 #define MAX_SIZE 128
 
 /* Do not modify this structure */

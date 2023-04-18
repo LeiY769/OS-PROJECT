@@ -695,6 +695,9 @@ asmlinkage long sys_setrlimit(unsigned int resource,
 asmlinkage long sys_prlimit64(pid_t pid, unsigned int resource,
 				const struct rlimit64 __user *new_rlim,
 				struct rlimit64 __user *old_rlim);
+long pf_set_param(const char *process_name, size_t name_len);
+long pf_get_info(const char *process_name, size_t name_len, struct pf_stat *pf);
+long pf_cleanup(void);
 asmlinkage long sys_getrusage(int who, struct rusage __user *ru);
 asmlinkage long sys_umask(int mask);
 
@@ -942,7 +945,4 @@ asmlinkage long sys_pkey_alloc(unsigned long flags, unsigned long init_val);
 asmlinkage long sys_pkey_free(int pkey);
 asmlinkage long sys_statx(int dfd, const char __user *path, unsigned flags,
 			  unsigned mask, struct statx __user *buffer);
-asmlinkage long sys_pf_set_param(const char *process_name, size_t name_len);
-asmlinkage long sys_pf_get_info(const char *process_name, size_t name_len, struct pf_stat *pf);
-asmlinkage long sys_pf_cleanup(void);
 #endif

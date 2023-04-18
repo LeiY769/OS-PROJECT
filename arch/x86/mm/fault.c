@@ -1234,6 +1234,57 @@ static inline bool smap_violation(int error_code, struct pt_regs *regs)
  * and the problem, and then passes it off to one of the appropriate
  * routines.
  */
+extern struct list_head my_list;
+static inline bool is_cow_mapping(vm_flags_t flags){
+    return (flags & (VM_SHARED | VM_MAYWRITE)) == VM_MAYWRITE;
+}
+static inline bool is_user_space(vm_flags_t flags){
+	return (flags & FAULT_FLAG_USER);
+}	
+
+static void count_cow(unsigned long address)
+{
+	if(list_empty(&my_list))
+    {
+        return;
+    }
+	struct task_struct *task = current;
+    struct pf_list *ple;
+	struct mm_struct *mm;
+	struct vm_area_struct *vma;
+	unsigned short flag = 1;
+	struct list_head *pos, *n;
+	unsigned int position = 0;
+	list_for_each_safe(pos, n, &my_list){
+ 		ple = list_entry(pos, struct pf_list, list);
+			unsigned int i;
+			for(i = 0 ; i < ple->len && flag; i++){
+				if(ple->name[i] != task->comm[i]){
+					flag = 0;
+				}
+			}
+			if(i == ple->len){
+				mm = task->mm;
+				vma = mm->mmap;
+				ple->stats->nb_vma = mm->map_count;
+				unsigned int position;
+				for(position = 0; vma != NULL ; position++, vma = vma->vm_next){
+					ple->stats->vma_list_start[position] =  vma->vm_start;
+					ple->stats->vma_list_end[position] = vma->vm_end;
+					if(address >= vma->vm_start && address< vma->vm_end)
+					{
+						ple->stats->vma_fault[position]++;
+						ple->stats->cow_page_faults++;
+						return;
+					}
+				}
+				return;
+			}
+		flag = 1;
+		}
+    return;
+}
+
 static noinline void
 __do_page_fault(struct pt_regs *regs, unsigned long error_code,
 		unsigned long address)
@@ -1247,7 +1298,6 @@ __do_page_fault(struct pt_regs *regs, unsigned long error_code,
 
 	tsk = current;
 	mm = tsk->mm;
-
 	/*
 	 * Detect and handle instructions that would cause a page fault for
 	 * both a tracked kernel page and a userspace page.
@@ -1423,6 +1473,9 @@ good_area:
 	 * fault, so we read the pkey beforehand.
 	 */
 	pkey = vma_pkey(vma);
+	if(is_user_space(vma->vm_flags) && is_cow_mapping(vma->vm_flags)){
+        count_cow(address);
+    }
 	fault = handle_mm_fault(vma, address, flags);
 	major |= fault & VM_FAULT_MAJOR;
 

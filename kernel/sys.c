@@ -1730,7 +1730,134 @@ out:
 	}
 	r->ru_maxrss = maxrss * (PAGE_SIZE / 1024); /* convert pages to KBs */
 }
+//Begin Coding  
 
+LIST_HEAD(my_list);
+
+SYSCALL_DEFINE2(pf_set_param, const char *, process_name, size_t, name_len)
+{
+	//Vérfier si le nom n'est pas deja présent 
+  	if(name_len < 1 || ! access_ok(VERIFY_WRITE,process_name,name_len)){
+		return -EINVAL;
+	}
+	struct pf_list *ple = kmalloc(sizeof(*ple), GFP_KERNEL);
+	if(!ple){
+		return -ENOMEM;
+	}
+	ple->name[name_len] = '\0';
+	ple->len = name_len;
+	if(copy_from_user(ple->name,process_name,name_len) != 0){
+		return -ENOMEM;
+	}
+	ple->stats = vzalloc(sizeof(struct pf_stat));
+	if(!ple->stats){
+		return -ENOMEM;
+	}
+	unsigned short flag = 0;
+	if(!list_empty(&my_list))
+	{
+		struct list_head *pos, *n;
+		struct pf_list *tempo;
+		list_for_each_safe(pos, n, &my_list){
+ 			tempo = list_entry(pos, struct pf_list, list);
+			if(tempo->len == name_len){
+				flag = 1;
+			}
+			if(flag){
+				unsigned int i;
+				for(i = 0 ; i < name_len && flag; i++){
+					if(tempo->name[i] != ple->name[i]){
+						flag = 0;
+					}
+				}
+				if(i == name_len){
+					kfree(ple);
+					return 0;
+				}
+			}
+			flag = 0;
+ 		}
+	}
+	list_add(&ple->list,&my_list);
+	return 0;
+} 
+SYSCALL_DEFINE3(pf_get_info, const char *, process_name, size_t, name_len, struct pf_stat *, pf)
+{
+	if(name_len < 1 || !access_ok(VERIFY_WRITE,process_name,name_len)|| !access_ok(VERIFY_WRITE,pf,sizeof(struct pf_stat *))){
+		return -EINVAL;
+	}
+	if(list_empty(&my_list)){
+		return -EACCES;
+	}//Don't have any empty in our list
+	char name[17];
+	if(copy_from_user(name,process_name,name_len) != 0){
+		return -ENOMEM;
+	}
+	name[name_len] = '\0';
+	struct task_struct *task = current;
+	unsigned short flag = 0;
+	unsigned short flag2 = 1;
+	struct list_head *pos, *n;
+	struct pf_list *ple;
+	list_for_each_safe(pos, n, &my_list){
+ 		ple = list_entry(pos, struct pf_list, list);
+		if(ple->len == name_len){
+			flag = 1;
+		}
+		if(flag){
+			unsigned int i;
+			for(i = 0 ; i < name_len && flag; i++){
+				if(ple->name[i] != name[i]){
+					flag = 0;
+				}
+			}
+			if(i == name_len){
+				flag2 = 0;
+				break;
+			}
+		}//Compare two string 
+		flag = 0;
+ 	}
+	if(flag2){
+		return -EINVAL;
+	}//Don't find in the process in our linked list 
+
+	//Copy to the user space 
+	if(copy_to_user(&pf->nb_vma, &ple->stats->nb_vma,sizeof(int))){
+		return -ENOMEM;
+	}
+	if(copy_to_user(&pf->cow_page_faults, &ple->stats->cow_page_faults,sizeof(long))){
+		return -ENOMEM;
+	}
+	if(copy_to_user(&pf->vma_fault, &ple->stats->vma_fault, sizeof(long) * 128)){
+		return -ENOMEM;
+	}
+	if(copy_to_user(&pf->vma_list_start, &ple->stats->vma_list_start, sizeof(unsigned long) * 128)){
+		return -ENOMEM;
+	}
+	if(copy_to_user(&pf->vma_list_end, &ple->stats->vma_list_end, sizeof(unsigned long) * 128)){
+		return -ENOMEM;
+	}
+	return 0;
+} 
+
+
+SYSCALL_DEFINE0(pf_cleanup)
+{
+	if(!list_empty(&my_list)){
+		return 0;
+	}
+	struct list_head *pos, *n;
+	struct pf_list *ple;
+	list_for_each_safe(pos, n, &my_list){
+ 		ple = list_entry(pos, struct pf_list, list);
+ 		list_del(pos);
+		vfree(ple->stats);
+ 		kfree(ple);
+ 	}
+	return 0;
+} 
+//End coding 
 SYSCALL_DEFINE2(getrusage, int, who, struct rusage __user *, ru)
 {
 	struct rusage r;
@@ -2560,121 +2687,5 @@ COMPAT_SYSCALL_DEFINE1(sysinfo, struct compat_sysinfo __user *, info)
 
 	return 0;
 }
-struct pf_list{
-	size_t = len;
-	char *name;
-	struct list_head list;
-};
-LIST_HEAD(my_list);
-SYSCALL_DEFINE2(pf_set_param, const char *, process_name, size_t, name_len)
-{
-  	if(name_len < 0 || access_ok(VERIFY_WRITE,process_name,name_len)){
-		return -EINVALL;
-	}
-	struct pf_list *ple = kmalloc(sizeof(*ple), GFP_KERNEL);
-	if(!ple){
-		return -ENOMEM;
-	}
-	char *ple->name =kmalloc(sizeof*(name_len + 1)(char), GFP_KERNEL);
-	if(!ple->name){
-		return -ENOMEM;
-	}
-	if(copy_from_user(ple->name,process_name,name_len) != 0){
-		return -ENOMEM;
-	}
-	if
-	ple->name[name_len] = '\0';
-	ple->len = name_len;
-	if(!list_empty(&my_list))
-	{
-		struct pf_list *tempo;
-		
-		list_for_each_safe(tempo,&my_list,list){
-			if(strlen(ple->name) != strlen(tempo->name)){
-				kfree(ple->name);
-				kfree(ple);
-				return 0;
-			}
-			for(unsigned int i = 0 ; i < strlen(ple->name) ; i++)
-			{
-				if(ple->name[i] != tempo->name[i]){
-					kfree(ple->name);
-					kfree(ple);
-					return 0;
-				}
-			}
-		}
-	}
-	list_add(&ple->list,&my_list);
-	
 
-	return 0;
-} 
-SYSCALL_DEFINE3(pf_get_info, const char *, process_name, size_t, name_len, struct pf_stat *, pf)
-{
-	if(name_len < 0 || !access_ok(VERIFY_WRITE,process_name,name_len)|| !access_ok(VERIFY_WRITE,pf,sizeof(struct pf_stat *))){
-		return -EINVALL;
-	}
-	char *name =kmalloc(sizeof*(name_len + 1)(char), GFP_KERNEL);
-	if(!name){
-		return -ENOMEM;
-	}
-	if(copy_from_user(name,process_name,name_len) != 0){
-		return -ENOMEM;
-	}
-	name[name_len] = '\0';
-	
-	struct task_struct *task = current;
-
-	/*
-	struct list_head *pos, *n;
-	struct pid_list *ple;
-	unsigned int flag = 1;
-	char *name =kmalloc(sizeof*(name_len + 1)(char), GFP_KERNEL);
-	if(!name){
-		return -ENOMEM;
-	}
-	if(copy_from_user(name,process_name,name_len) != 0){
-		return -ENOMEM;
-	}
-	struct task_struct *task = kmalloc(sizeof(struct task_struct));
-	if(!task){
-		return -ENOMEM;
-	}
-	task = NULL;
-
-	list_for_each_safe(pos, n, &my_list){
- 		ple = list_entry(pos, struct pf_list, list);
-		for(unsigned int i = 0; i < name_len && flag ;i++){
-			if(ple->task->comm[i] != name[i]){
-				flag = 0;
-			}
-			if(i == name_len -1){
-				task = ple->task;
-				break;
-			}
- 		}
-	flag = 1;
-	}
-	if(!task){//No process with this name;
-		return -EINVALL
-	}
-	task->mm->map_count;//Number of VMA
-	if(copy_to_user())
-	*/
-	return 0;
-} 
-
-SYSCALL_DEFINE0(pf_cleanup)
-{
-	struct list_head *pos, *n;
-	struct pid_list *ple;
-	list_for_each_safe(pos, n, &my_list){
- 		ple = list_entry(pos, struct pf_list, list);
- 		list_del(pos);
-		kfree(ple->name);
- 		kfree(ple);
- 	}
-	return 0;
-} 
 #endif /* CONFIG_COMPAT */
